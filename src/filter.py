@@ -39,20 +39,19 @@ def notify(user: str, commentary: str, title: str = "document") -> None:
     """Send a macOS desktop notification with the commentary."""
     # Truncate for notification display
     short = commentary[:150] + ("..." if len(commentary) > 150 else "")
-    # Escape quotes for AppleScript
-    short = short.replace("\\", "\\\\").replace('"', '\\"')
-    title_safe = title.replace("\\", "\\\\").replace('"', '\\"')
 
+    # Pass text via stdin to avoid AppleScript injection through string interpolation
     script = (
-        f'display notification "{short}" '
-        f'with title "🖨️ Your Printer Has Thoughts" '
-        f'subtitle "{title_safe}"'
+        'on run argv\n'
+        '  set msg to item 1 of argv\n'
+        '  set subtitle_text to item 2 of argv\n'
+        '  display notification msg with title "🖨️ Your Printer Has Thoughts" subtitle subtitle_text\n'
+        'end run'
     )
 
     try:
-        # Run as the printing user so it hits their notification center
-        cmd = ["sudo", "-u", user, "osascript", "-e", script] if user else ["osascript", "-e", script]
-        subprocess.run(cmd, timeout=5, capture_output=True)
+        cmd = ["sudo", "-u", user, "osascript", "-", short, title] if user else ["osascript", "-", short, title]
+        subprocess.run(cmd, input=script, text=True, timeout=5, capture_output=True)
         log("Notification sent")
     except Exception as e:
         log(f"Notification failed (non-fatal): {e}")
@@ -96,24 +95,30 @@ def enhance(input_path: str, pdf_mode: bool = False, title: str = "document", us
     try:
         append_commentary(input_path, commentary, output_path)
 
-        if pdf_mode:
-            # Save to user's Desktop instead of forwarding to printer
-            safe_title = "".join(c if c.isalnum() or c in " -_." else "_" for c in title).strip() or "print"
-            # Resolve the printing user's home (filter runs as _lp, not the user)
+        if pdf_mode and user:
+            # Save to user's Desktop — filter runs as _lp, so use sudo -u
+            safe_title = "".join(c if c.isalnum() or c in " -_" else "_" for c in title).strip() or "print"
+            safe_title = os.path.basename(safe_title)
             import pwd
             try:
-                user_home = pwd.getpwnam(user).pw_dir if user else os.path.expanduser("~")
+                user_home = pwd.getpwnam(user).pw_dir
             except KeyError:
-                user_home = os.path.expanduser("~")
+                user_home = f"/Users/{user}"
             pdf_dir = config.get("pdf_output_dir", os.path.join(user_home, "Desktop"))
-            os.makedirs(pdf_dir, exist_ok=True)
             dest = os.path.join(pdf_dir, f"{safe_title}_sentient.pdf")
-            # Avoid overwriting existing files
+            # Find unique filename via sudo test
             counter = 1
-            while os.path.exists(dest):
+            while subprocess.run(
+                ["sudo", "-u", user, "test", "-e", dest],
+                capture_output=True,
+            ).returncode == 0:
                 dest = os.path.join(pdf_dir, f"{safe_title}_sentient_{counter}.pdf")
                 counter += 1
-            shutil.copy2(output_path, dest)
+            # Copy as the printing user so permissions are correct
+            subprocess.run(
+                ["sudo", "-u", user, "cp", output_path, dest],
+                check=True, capture_output=True,
+            )
             log(f"PDF saved to {dest}")
 
         # Always write to stdout for CUPS pipeline

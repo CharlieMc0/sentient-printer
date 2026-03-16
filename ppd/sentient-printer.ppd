@@ -22,8 +22,8 @@
 *TTRasterizer: Type42
 
 *% Filter declaration — CUPS calls our filter for PDF input
-*cupsFilter: "application/pdf 0 sentient-printer-filter"
-*cupsFilter: "application/vnd.cups-pdf 0 sentient-printer-filter"
+*cupsFilter: "application/pdf 0 /usr/local/libexec/cups/filter/sentient-printer-filter"
+*cupsFilter: "application/vnd.cups-pdf 0 /usr/local/libexec/cups/filter/sentient-printer-filter"
 
 *% Basic page sizes
 *OpenUI *PageSize/Media Size: PickOne
