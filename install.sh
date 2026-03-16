@@ -161,6 +161,7 @@ cp "$SCRIPT_DIR/ppd/sentient-printer.ppd" "$PPD_DIR/"
 echo -e "${GREEN}✓${NC} PPD file installed"
 
 # Write config
+mkdir -p "$(dirname "$CONFIG_PATH")"
 cat > "$CONFIG_PATH" << CONFIGEOF
 # Sentient Printer Configuration
 real_printer: "$REAL_PRINTER"
