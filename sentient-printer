@@ -104,11 +104,7 @@ def test(pdf_path):
     personality = config.get("personality", "passive-aggressive")
 
     print(f"📄 Extracting text from {pdf_path}...")
-    try:
-        text = extract_text(pdf_path)
-    except FileNotFoundError:
-        print("Error: pdftotext not found. Install it: brew install poppler")
-        sys.exit(1)
+    text = extract_text(pdf_path)
     if not text.strip():
         print("⚠️  No text found in PDF.")
         return

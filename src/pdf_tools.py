@@ -1,34 +1,22 @@
 """PDF text extraction and modification for Sentient Printer."""
 
 import io
-import subprocess
-import tempfile
 
 from fpdf import FPDF
 from pypdf import PdfReader, PdfWriter
 
 
 def extract_text(pdf_path: str) -> str:
-    """Extract text from a PDF using pdftotext (poppler).
+    """Extract text from a PDF using pypdf.
 
     Args:
         pdf_path: Path to the PDF file.
 
     Returns:
         Extracted text string.
-
-    Raises:
-        subprocess.CalledProcessError if pdftotext fails.
-        FileNotFoundError if pdftotext is not installed.
     """
-    result = subprocess.run(
-        ["pdftotext", "-layout", pdf_path, "-"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=30,
-    )
-    return result.stdout
+    reader = PdfReader(pdf_path)
+    return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 
 def create_commentary_page(commentary: str) -> bytes:

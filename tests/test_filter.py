@@ -82,11 +82,8 @@ class TestExtractText(unittest.TestCase):
         os.unlink(self.test_pdf)
 
     def test_extracts_text(self):
-        try:
-            text = extract_text(self.test_pdf)
-            self.assertIn("Hello from the test PDF", text)
-        except FileNotFoundError:
-            self.skipTest("pdftotext not installed (install poppler-utils)")
+        text = extract_text(self.test_pdf)
+        self.assertIn("Hello from the test PDF", text)
 
 
 class TestFilterFailOpen(unittest.TestCase):

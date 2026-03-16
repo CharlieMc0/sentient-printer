@@ -47,18 +47,6 @@ fi
 PYTHON_VERSION=$(python3 --version 2>&1)
 echo -e "${GREEN}✓${NC} Found $PYTHON_VERSION"
 
-# Check/install pdftotext (poppler)
-if ! command -v pdftotext &>/dev/null; then
-    echo -e "${YELLOW}pdftotext not found. Installing poppler via Homebrew...${NC}"
-    if command -v brew &>/dev/null; then
-        sudo -u "${SUDO_USER:-$USER}" brew install poppler
-    else
-        echo -e "${RED}Error: Homebrew not found. Install poppler manually: https://poppler.freedesktop.org/${NC}"
-        exit 1
-    fi
-fi
-echo -e "${GREEN}✓${NC} Found pdftotext (poppler)"
-
 # Check CUPS
 if ! command -v lpstat &>/dev/null; then
     echo -e "${RED}Error: CUPS not found. It should be built into macOS.${NC}"
