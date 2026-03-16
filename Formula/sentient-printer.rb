@@ -36,7 +36,7 @@ class SentientPrinter < Formula
   def post_install
     # Register CUPS virtual printer
     system "lpadmin", "-x", "SentientPrinter" rescue nil
-    system "sudo", "cp", "#{lib}/sentient-printer/sentient-printer-filter",
+    system "cp", "#{lib}/sentient-printer/sentient-printer-filter",
            "/usr/libexec/cups/filter/sentient-printer-filter"
     system "lpadmin", "-p", "SentientPrinter", "-E",
            "-v", "file:///dev/null",

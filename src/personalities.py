@@ -50,4 +50,10 @@ def get_system_prompt(personality: str, custom_prompt: str = "") -> str:
     """
     if personality == "custom" and custom_prompt:
         return custom_prompt
+    if personality not in PERSONALITIES:
+        import sys
+        print(
+            f"SENTIENT-PRINTER: Unknown personality '{personality}', using passive-aggressive",
+            file=sys.stderr,
+        )
     return PERSONALITIES.get(personality, PERSONALITIES["passive-aggressive"])

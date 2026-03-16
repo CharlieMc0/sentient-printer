@@ -184,7 +184,7 @@ llm:
   api_key: "$API_KEY"
   base_url: ""
 CONFIGEOF
-chmod 644 "$CONFIG_PATH"
+chmod 600 "$CONFIG_PATH"
 echo -e "${GREEN}✓${NC} Config written to $CONFIG_PATH"
 
 # --- Register CUPS printer ---

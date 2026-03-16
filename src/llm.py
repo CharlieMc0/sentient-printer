@@ -77,7 +77,11 @@ def _call_openai(system_prompt: str, user_message: str, llm_config: dict) -> str
         timeout=TIMEOUT,
     )
     resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"].strip()
+    data = resp.json()
+    try:
+        return data["choices"][0]["message"]["content"].strip()
+    except (KeyError, IndexError) as e:
+        raise ValueError(f"Unexpected OpenAI response: {data}") from e
 
 
 def _call_anthropic(system_prompt: str, user_message: str, llm_config: dict) -> str:
@@ -85,7 +89,7 @@ def _call_anthropic(system_prompt: str, user_message: str, llm_config: dict) -> 
         "https://api.anthropic.com/v1/messages",
         headers={
             "x-api-key": llm_config["api_key"],
-            "anthropic-version": "2023-06-01",
+            "anthropic-version": "2024-06-01",
             "Content-Type": "application/json",
         },
         json={
@@ -100,7 +104,11 @@ def _call_anthropic(system_prompt: str, user_message: str, llm_config: dict) -> 
         timeout=TIMEOUT,
     )
     resp.raise_for_status()
-    return resp.json()["content"][0]["text"].strip()
+    data = resp.json()
+    try:
+        return data["content"][0]["text"].strip()
+    except (KeyError, IndexError) as e:
+        raise ValueError(f"Unexpected Anthropic response: {data}") from e
 
 
 def _call_ollama(system_prompt: str, user_message: str, llm_config: dict) -> str:
@@ -124,4 +132,8 @@ def _call_ollama(system_prompt: str, user_message: str, llm_config: dict) -> str
         timeout=TIMEOUT,
     )
     resp.raise_for_status()
-    return resp.json()["message"]["content"].strip()
+    data = resp.json()
+    try:
+        return data["message"]["content"].strip()
+    except (KeyError, IndexError) as e:
+        raise ValueError(f"Unexpected Ollama response: {data}") from e

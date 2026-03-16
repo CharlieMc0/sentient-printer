@@ -104,7 +104,11 @@ def test(pdf_path):
     personality = config.get("personality", "passive-aggressive")
 
     print(f"📄 Extracting text from {pdf_path}...")
-    text = extract_text(pdf_path)
+    try:
+        text = extract_text(pdf_path)
+    except FileNotFoundError:
+        print("Error: pdftotext not found. Install it: brew install poppler")
+        sys.exit(1)
     if not text.strip():
         print("⚠️  No text found in PDF.")
         return
@@ -113,7 +117,8 @@ def test(pdf_path):
     commentary = get_commentary(text, personality, config)
     print(f"\n💬 [{personality}]:\n{commentary}\n")
 
-    output = pdf_path.rsplit(".", 1)[0] + "_sentient.pdf"
+    base, _ = os.path.splitext(pdf_path)
+    output = base + "_sentient.pdf"
     append_commentary(pdf_path, commentary, output)
     print(f"📝 Output: {output}")
 
