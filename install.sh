@@ -6,8 +6,8 @@ set -e
 
 INSTALL_DIR="/usr/local/lib/sentient-printer"
 CONFIG_PATH="/usr/local/etc/sentient-printer.yaml"
-FILTER_DIR="/usr/libexec/cups/filter"
-PPD_DIR="/usr/share/ppd/sentient-printer"
+FILTER_DIR="/usr/local/lib/cups/filter"
+PPD_DIR="/usr/local/share/ppd/sentient-printer"
 PRINTER_NAME="SentientPrinter"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -31,7 +31,7 @@ fi
 if [[ $EUID -ne 0 ]]; then
     echo -e "${YELLOW}This installer needs sudo access to install CUPS components.${NC}"
     echo "Re-running with sudo..."
-    exec sudo "$0" "$@"
+    exec sudo -H "$0" "$@"
 fi
 
 # Check/install Python 3
