@@ -10,6 +10,7 @@ Log to stderr (CUPS routes this to error_log).
 """
 
 import os
+import subprocess
 import sys
 import shutil
 import tempfile
@@ -32,6 +33,29 @@ if SRC_DIR not in sys.path:
 def log(msg: str) -> None:
     """Log to stderr (CUPS error_log)."""
     print(f"SENTIENT-PRINTER: {msg}", file=sys.stderr)
+
+
+def notify(user: str, commentary: str, title: str = "document") -> None:
+    """Send a macOS desktop notification with the commentary."""
+    # Truncate for notification display
+    short = commentary[:150] + ("..." if len(commentary) > 150 else "")
+    # Escape quotes for AppleScript
+    short = short.replace("\\", "\\\\").replace('"', '\\"')
+    title_safe = title.replace("\\", "\\\\").replace('"', '\\"')
+
+    script = (
+        f'display notification "{short}" '
+        f'with title "🖨️ Your Printer Has Thoughts" '
+        f'subtitle "{title_safe}"'
+    )
+
+    try:
+        # Run as the printing user so it hits their notification center
+        cmd = ["sudo", "-u", user, "osascript", "-e", script] if user else ["osascript", "-e", script]
+        subprocess.run(cmd, timeout=5, capture_output=True)
+        log("Notification sent")
+    except Exception as e:
+        log(f"Notification failed (non-fatal): {e}")
 
 
 def passthrough(input_path: str) -> None:
@@ -63,6 +87,9 @@ def enhance(input_path: str, pdf_mode: bool = False, title: str = "document", us
     # Get LLM commentary
     commentary = get_commentary(text, personality, config)
     log(f"Got commentary: {commentary[:100]}...")
+
+    # Desktop notification
+    notify(user, commentary, title)
 
     # Create modified PDF
     output_path = input_path + ".enhanced.pdf"
