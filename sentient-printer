@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+"""Sentient Printer CLI — configure, test, and manage your sentient printer."""
+
+import os
+import subprocess
+import sys
+import yaml
+
+CONFIG_PATH = "/usr/local/etc/sentient-printer.yaml"
+PRINTER_NAME = "SentientPrinter"
+
+PERSONALITIES = [
+    ("passive-aggressive", "Corporate snark"),
+    ("existential", "Questions the meaning of printing"),
+    ("supportive", "Wholesome encouragement"),
+    ("eco-guilt", "Environmental shame"),
+    ("judgy", "Pure judgment"),
+    ("unhinged", "Chaotic energy"),
+]
+
+PROVIDERS = [
+    ("openai", "OpenAI (requires API key)"),
+    ("anthropic", "Anthropic (requires API key)"),
+    ("ollama", "Ollama (local, no key needed)"),
+]
+
+
+def configure():
+    """Interactive first-time setup."""
+    print("\n🖨️  Sentient Printer Setup\n")
+
+    # Pick real printer
+    print("Your printers:")
+    result = subprocess.run(["lpstat", "-p"], capture_output=True, text=True)
+    printers = []
+    for line in result.stdout.strip().splitlines():
+        name = line.split()[1] if len(line.split()) > 1 else None
+        if name and name != PRINTER_NAME:
+            printers.append(name)
+            print(f"  {len(printers)}) {name}")
+
+    if not printers:
+        print("  (no printers found — you can set one later)")
+        real_printer = ""
+    else:
+        choice = input(f"\nWhich printer should I forward to? [1]: ").strip()
+        idx = int(choice or "1") - 1
+        real_printer = printers[max(0, min(idx, len(printers) - 1))]
+
+    # Pick personality
+    print("\nPersonality:")
+    for i, (name, desc) in enumerate(PERSONALITIES, 1):
+        print(f"  {i}) {name} — {desc}")
+    choice = input(f"\nPick one [1]: ").strip()
+    idx = int(choice or "1") - 1
+    personality = PERSONALITIES[max(0, min(idx, len(PERSONALITIES) - 1))][0]
+
+    # Pick provider
+    print("\nLLM Provider:")
+    for i, (name, desc) in enumerate(PROVIDERS, 1):
+        print(f"  {i}) {name} — {desc}")
+    choice = input(f"\nPick one [1]: ").strip()
+    idx = int(choice or "1") - 1
+    provider = PROVIDERS[max(0, min(idx, len(PROVIDERS) - 1))][0]
+
+    api_key = ""
+    if provider != "ollama":
+        api_key = input(f"\n{provider} API key: ").strip()
+
+    # Write config
+    config = {
+        "real_printer": real_printer,
+        "personality": personality,
+        "llm": {
+            "provider": provider,
+            "model": "",
+            "api_key": api_key,
+            "base_url": "",
+        },
+    }
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    with open(CONFIG_PATH, "w") as f:
+        yaml.dump(config, f, default_flow_style=False)
+
+    print(f"\n✅ Config saved to {CONFIG_PATH}")
+    print(f"   Printer: {real_printer or '(none)'}")
+    print(f"   Personality: {personality}")
+    print(f"   Provider: {provider}")
+    print(f"\nTest it: sentient-printer test /path/to/any.pdf\n")
+
+
+def test(pdf_path):
+    """Test print a PDF through the sentient pipeline (no CUPS, just stdout)."""
+    src_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
+    if not os.path.isdir(src_dir):
+        src_dir = "/usr/local/lib/sentient-printer"
+    sys.path.insert(0, src_dir)
+
+    from config import load_config
+    from llm import get_commentary
+    from pdf_tools import extract_text, append_commentary
+
+    config = load_config()
+    personality = config.get("personality", "passive-aggressive")
+
+    print(f"📄 Extracting text from {pdf_path}...")
+    text = extract_text(pdf_path)
+    if not text.strip():
+        print("⚠️  No text found in PDF.")
+        return
+
+    print(f"🧠 Asking LLM ({config['llm']['provider']}/{config['llm']['model']})...")
+    commentary = get_commentary(text, personality, config)
+    print(f"\n💬 [{personality}]:\n{commentary}\n")
+
+    output = pdf_path.rsplit(".", 1)[0] + "_sentient.pdf"
+    append_commentary(pdf_path, commentary, output)
+    print(f"📝 Output: {output}")
+
+
+def status():
+    """Show current config and printer status."""
+    # Printer registered?
+    result = subprocess.run(["lpstat", "-p", PRINTER_NAME], capture_output=True, text=True)
+    if result.returncode == 0:
+        print(f"🖨️  {PRINTER_NAME}: registered")
+    else:
+        print(f"🖨️  {PRINTER_NAME}: not found")
+
+    # Config?
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH) as f:
+            config = yaml.safe_load(f)
+        print(f"📋 Config: {CONFIG_PATH}")
+        print(f"   Forward to: {config.get('real_printer', '(none)')}")
+        print(f"   Personality: {config.get('personality', '(none)')}")
+        llm = config.get("llm", {})
+        print(f"   LLM: {llm.get('provider', '?')}/{llm.get('model', 'default')}")
+        print(f"   API key: {'set' if llm.get('api_key') else 'not set'}")
+    else:
+        print(f"📋 No config found. Run: sentient-printer configure")
+
+
+def usage():
+    print("Usage: sentient-printer <command>")
+    print("")
+    print("Commands:")
+    print("  configure          Interactive setup (pick printer, personality, API key)")
+    print("  test <file.pdf>    Test the pipeline on a PDF without printing")
+    print("  status             Show current configuration")
+    print("")
+
+
+def main():
+    if len(sys.argv) < 2:
+        usage()
+        sys.exit(1)
+
+    cmd = sys.argv[1]
+    if cmd == "configure":
+        configure()
+    elif cmd == "test":
+        if len(sys.argv) < 3:
+            print("Usage: sentient-printer test <file.pdf>")
+            sys.exit(1)
+        test(sys.argv[2])
+    elif cmd == "status":
+        status()
+    else:
+        usage()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

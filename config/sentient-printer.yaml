@@ -1,0 +1,18 @@
+# Sentient Printer Configuration
+# See CLAUDE.md for full documentation
+
+# CUPS name of your real printer (run `lpstat -p` to list printers)
+real_printer: ""
+
+# Personality: passive-aggressive, existential, supportive, eco-guilt, judgy, unhinged, custom
+personality: "passive-aggressive"
+
+# Custom system prompt (only used when personality is "custom")
+# custom_prompt: "You are a printer that speaks only in haiku..."
+
+# LLM settings
+llm:
+  provider: "openai"       # openai | anthropic | ollama
+  model: ""                # Leave empty for provider default (gpt-4o / claude-sonnet / llama3.1)
+  api_key: ""              # Required for openai/anthropic, ignored for ollama
+  base_url: ""             # Only needed for custom endpoints or ollama (default: http://localhost:11434)
