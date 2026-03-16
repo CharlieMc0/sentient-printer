@@ -34,18 +34,28 @@ if [[ $EUID -ne 0 ]]; then
     exec sudo "$0" "$@"
 fi
 
-# Check Python 3
+# Check/install Python 3
 if ! command -v python3 &>/dev/null; then
-    echo -e "${RED}Error: Python 3 is required. Install it with: brew install python3${NC}"
-    exit 1
+    echo -e "${YELLOW}Python 3 not found. Installing via Homebrew...${NC}"
+    if command -v brew &>/dev/null; then
+        sudo -u "${SUDO_USER:-$USER}" brew install python3
+    else
+        echo -e "${RED}Error: Homebrew not found. Install Python 3 manually.${NC}"
+        exit 1
+    fi
 fi
 PYTHON_VERSION=$(python3 --version 2>&1)
 echo -e "${GREEN}✓${NC} Found $PYTHON_VERSION"
 
-# Check pdftotext
+# Check/install pdftotext (poppler)
 if ! command -v pdftotext &>/dev/null; then
-    echo -e "${RED}Error: pdftotext is required. Install it with: brew install poppler${NC}"
-    exit 1
+    echo -e "${YELLOW}pdftotext not found. Installing poppler via Homebrew...${NC}"
+    if command -v brew &>/dev/null; then
+        sudo -u "${SUDO_USER:-$USER}" brew install poppler
+    else
+        echo -e "${RED}Error: Homebrew not found. Install poppler manually: https://poppler.freedesktop.org/${NC}"
+        exit 1
+    fi
 fi
 echo -e "${GREEN}✓${NC} Found pdftotext (poppler)"
 
