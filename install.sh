@@ -64,16 +64,17 @@ echo "---"
 lpstat -p 2>/dev/null | sed 's/^printer /  /' | sed 's/ is.*$//' || true
 echo "---"
 echo ""
-read -rp "Enter the name of your REAL printer to forward jobs to: " REAL_PRINTER
+echo "Enter the name of your REAL printer to forward jobs to."
+echo "Or leave blank for PDF-only mode (saves to Desktop, no forwarding)."
+echo ""
+read -rp "Real printer (blank for PDF-only): " REAL_PRINTER
 
-if [[ -z "$REAL_PRINTER" ]]; then
-    echo -e "${RED}Error: You must specify a real printer.${NC}"
-    exit 1
-fi
-
-# Verify printer exists
-if ! lpstat -p "$REAL_PRINTER" &>/dev/null; then
-    echo -e "${YELLOW}Warning: Printer '$REAL_PRINTER' not found in CUPS. Continuing anyway.${NC}"
+if [[ -n "$REAL_PRINTER" ]]; then
+    if ! lpstat -p "$REAL_PRINTER" &>/dev/null; then
+        echo -e "${YELLOW}Warning: Printer '$REAL_PRINTER' not found in CUPS. Continuing anyway.${NC}"
+    fi
+else
+    echo -e "${GREEN}✓${NC} PDF-only mode — enhanced PDFs will be saved to your Desktop"
 fi
 
 # Select personality
@@ -176,22 +177,25 @@ CONFIGEOF
 chmod 600 "$CONFIG_PATH"
 echo -e "${GREEN}✓${NC} Config written to $CONFIG_PATH"
 
-# --- Register CUPS printer ---
+# --- Register CUPS printers ---
 
-# Remove existing if present
-lpadmin -x "$PRINTER_NAME" 2>/dev/null || true
-
-# Register the virtual printer (forwards to real printer)
-lpadmin -p "$PRINTER_NAME" \
-    -E \
-    -v "file:///dev/null" \
-    -P "$PPD_DIR/sentient-printer.ppd" \
-    -D "Sentient Printer" \
-    -L "Your printer, but with opinions"
-echo -e "${GREEN}✓${NC} CUPS printer '$PRINTER_NAME' registered"
-
-# Register the PDF-only printer (saves to Desktop)
 PDF_PRINTER_NAME="SentientPDF"
+
+if [[ -n "$REAL_PRINTER" ]]; then
+    # Register the forwarding printer
+    lpadmin -x "$PRINTER_NAME" 2>/dev/null || true
+    lpadmin -p "$PRINTER_NAME" \
+        -E \
+        -v "file:///dev/null" \
+        -P "$PPD_DIR/sentient-printer.ppd" \
+        -D "Sentient Printer" \
+        -L "Your printer, but with opinions"
+    cupsenable "$PRINTER_NAME" 2>/dev/null || true
+    cupsaccept "$PRINTER_NAME" 2>/dev/null || true
+    echo -e "${GREEN}✓${NC} CUPS printer '$PRINTER_NAME' registered (forwards to $REAL_PRINTER)"
+fi
+
+# Always register the PDF-only printer
 lpadmin -x "$PDF_PRINTER_NAME" 2>/dev/null || true
 lpadmin -p "$PDF_PRINTER_NAME" \
     -E \
@@ -199,13 +203,9 @@ lpadmin -p "$PDF_PRINTER_NAME" \
     -P "$PPD_DIR/sentient-printer.ppd" \
     -D "Sentient PDF" \
     -L "Get roasted, saved to Desktop"
-echo -e "${GREEN}✓${NC} CUPS printer '$PDF_PRINTER_NAME' registered (saves PDF to Desktop)"
-
-# Enable
-cupsenable "$PRINTER_NAME" 2>/dev/null || true
-cupsaccept "$PRINTER_NAME" 2>/dev/null || true
 cupsenable "$PDF_PRINTER_NAME" 2>/dev/null || true
 cupsaccept "$PDF_PRINTER_NAME" 2>/dev/null || true
+echo -e "${GREEN}✓${NC} CUPS printer '$PDF_PRINTER_NAME' registered (saves PDF to Desktop)"
 
 echo ""
 echo -e "${GREEN}✅ Sentient Printer installed!${NC}"
