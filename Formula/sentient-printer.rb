@@ -36,7 +36,7 @@ class SentientPrinter < Formula
     # Register CUPS virtual printer
     system "lpadmin", "-x", "SentientPrinter" rescue nil
     system "cp", "#{lib}/sentient-printer/sentient-printer-filter",
-           "/usr/local/lib/cups/filter/sentient-printer-filter"
+           "/usr/local/libexec/cups/filter/sentient-printer-filter"
     system "lpadmin", "-p", "SentientPrinter", "-E",
            "-v", "file:///dev/null",
            "-P", "#{share}/ppd/sentient-printer/sentient-printer.ppd",

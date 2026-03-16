@@ -6,7 +6,7 @@ set -e
 
 INSTALL_DIR="/usr/local/lib/sentient-printer"
 CONFIG_PATH="/usr/local/etc/sentient-printer.yaml"
-FILTER_DIR="/usr/local/lib/cups/filter"
+FILTER_DIR="/usr/local/libexec/cups/filter"
 PPD_DIR="/usr/local/share/ppd/sentient-printer"
 PRINTER_NAME="SentientPrinter"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -148,10 +148,16 @@ mkdir -p "$FILTER_DIR"
 cat > "$FILTER_DIR/sentient-printer-filter" << 'FILTER_WRAPPER'
 #!/bin/bash
 # Sentient Printer CUPS filter wrapper
-# Activates the venv and runs the Python filter
 VENV="/usr/local/lib/sentient-printer/venv"
 export PATH="$VENV/bin:$PATH"
-exec "$VENV/bin/python3" /usr/local/lib/sentient-printer/filter.py "$@"
+echo "SENTIENT-PRINTER: Filter wrapper starting ($(date))" >&2
+echo "SENTIENT-PRINTER: Args: $*" >&2
+"$VENV/bin/python3" /usr/local/lib/sentient-printer/filter.py "$@"
+EXIT_CODE=$?
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "SENTIENT-PRINTER: Python filter exited with code $EXIT_CODE" >&2
+fi
+exit $EXIT_CODE
 FILTER_WRAPPER
 chmod 755 "$FILTER_DIR/sentient-printer-filter"
 echo -e "${GREEN}✓${NC} CUPS filter installed"

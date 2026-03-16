@@ -5,7 +5,7 @@ set -e
 
 INSTALL_DIR="/usr/local/lib/sentient-printer"
 CONFIG_PATH="/usr/local/etc/sentient-printer.yaml"
-FILTER_PATH="/usr/local/lib/cups/filter/sentient-printer-filter"
+FILTER_PATH="/usr/local/libexec/cups/filter/sentient-printer-filter"
 PPD_DIR="/usr/local/share/ppd/sentient-printer"
 PRINTER_NAME="SentientPrinter"
 PDF_PRINTER_NAME="SentientPDF"
