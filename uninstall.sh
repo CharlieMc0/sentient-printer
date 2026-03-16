@@ -57,6 +57,13 @@ if [[ -f "$CONFIG_PATH" ]]; then
     echo -e "${GREEN}✓${NC} Removed config file"
 fi
 
+# Remove sudoers rule
+SUDOERS_FILE="/etc/sudoers.d/sentient-printer"
+if [[ -f "$SUDOERS_FILE" ]]; then
+    rm "$SUDOERS_FILE"
+    echo -e "${GREEN}✓${NC} Removed sudoers rule"
+fi
+
 echo ""
 echo -e "${GREEN}✅ Sentient Printer uninstalled.${NC}"
 echo "   Your printer no longer has opinions."

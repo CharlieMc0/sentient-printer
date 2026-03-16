@@ -183,6 +183,15 @@ CONFIGEOF
 chmod 600 "$CONFIG_PATH"
 echo -e "${GREEN}✓${NC} Config written to $CONFIG_PATH"
 
+# --- Grant _lp user permissions for notifications and PDF saving ---
+SUDOERS_FILE="/etc/sudoers.d/sentient-printer"
+cat > "$SUDOERS_FILE" << 'SUDOERS'
+# Sentient Printer — allow CUPS _lp user to run commands as the printing user
+_lp ALL=(ALL) NOPASSWD: /bin/cp, /bin/test, /usr/bin/osascript
+SUDOERS
+chmod 440 "$SUDOERS_FILE"
+echo -e "${GREEN}✓${NC} Sudoers rule installed for notifications and PDF saving"
+
 # --- Register CUPS printers ---
 
 PDF_PRINTER_NAME="SentientPDF"

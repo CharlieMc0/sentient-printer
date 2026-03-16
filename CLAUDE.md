@@ -1,7 +1,7 @@
 # Sentient Printer — CLAUDE.md
 
 ## What Is This?
-A virtual printer driver for macOS powered by an LLM. It installs as a regular printer on the system. When you print to it, the LLM reads the document, generates personality-driven commentary, modifies the output (appends a page, adds a footer, etc.), and forwards the job to your real physical printer.
+A virtual printer driver for macOS powered by an LLM. It installs as a regular printer on the system. When you print to it, the LLM reads the document, generates personality-driven commentary, appends a commentary page, and either forwards to your real printer or saves a PDF to your Desktop.
 
 The fun IS the product. This is a humor/personality project with viral potential, not enterprise software.
 
@@ -20,211 +20,157 @@ macOS uses CUPS natively. This makes the install clean.
 
 ### How It Works
 ```
-User App → Print → "Sentient Printer" (CUPS virtual printer) → LLM → Modified PDF → Real Printer
+User App → Print → "Sentient Printer" (CUPS virtual printer) → LLM → Modified PDF → Real Printer / Desktop PDF
 ```
 
-1. **CUPS backend/filter** — A custom CUPS filter (Python script) registered as a virtual printer
-2. **Text extraction** — `pdftotext` (poppler-utils) extracts readable text from the print job (arrives as PDF/PostScript). This is a hard dependency — pypdf text extraction is unreliable on real-world PDFs.
+1. **CUPS filter** — A custom CUPS filter (Python script) registered as a virtual printer
+2. **Text extraction** — `pypdf` extracts readable text from the print job (pure Python, no external deps)
 3. **LLM call** — Send extracted text to an LLM API with a personality system prompt. Support:
    - Cloud: OpenAI (default), Anthropic — configurable API key
    - Local: Ollama — for privacy/offline use
-4. **PDF modification** — Using `fpdf2` to generate a commentary page + `pypdf` to merge it into the original document:
-   - Append an extra page with the commentary (only mode for MVP)
-5. **Forward to real printer** — Send the modified PDF to the user's actual printer via CUPS (the real printer is configured during setup)
+4. **PDF modification** — Using `fpdf2` to generate a commentary page + `pypdf` to merge it into the original document
+5. **Desktop notification** — macOS notification with commentary snippet via `osascript`
+6. **Output** — Either forward to real printer (SentientPrinter) or save PDF to Desktop (SentientPDF)
+
+### Two Printer Modes
+- **SentientPrinter** — Enhances and forwards to a real physical printer
+- **SentientPDF** — Enhances and saves to `~/Desktop/<title>_sentient.pdf` (no forwarding)
+- Install supports PDF-only mode (skip real printer selection)
 
 ### CUPS Filter Pipeline
-CUPS filters are scripts that process print jobs in a pipeline. Our filter:
+Our filter at `/usr/local/libexec/cups/filter/sentient-printer-filter`:
 - Receives the print job from CUPS
-- Converts to PDF if needed (PostScript → PDF via `ps2pdf`)
-- Extracts text
-- Calls LLM
-- Modifies PDF
-- Passes to the next filter / backend for the real printer
+- Extracts text via pypdf
+- Calls LLM with personality prompt
+- Appends commentary page
+- Sends notification to user's desktop
+- Writes enhanced PDF to stdout (CUPS pipeline) and/or saves to Desktop
+- **Fail-open**: any error passes the original PDF through unmodified
 
-Filter location: `/usr/libexec/cups/filter/` or `/usr/local/lib/cups/filter/`
-Backend location: `/usr/libexec/cups/backend/` or `/usr/local/lib/cups/backend/`
-
-PPD file defines the virtual printer's capabilities.
+PPD uses absolute path: `/usr/local/libexec/cups/filter/sentient-printer-filter`
+(SIP blocks `/usr/libexec/`, so we use `/usr/local/libexec/`)
 
 ### CUPS Execution Context
 CUPS filters run as the `_lp` user on macOS, NOT as your user. This matters:
 - Filter scripts must be executable by `_lp` (permissions: `755`, owner: `root`)
-- Python dependencies must be installed system-wide or in a venv accessible to `_lp`
-- The install script handles this by creating a venv at `/usr/local/lib/sentient-printer/venv/` owned by root, and the filter script activates it
-- Config file at `/usr/local/etc/sentient-printer.yaml` must be readable by `_lp`
-- Logs go to CUPS error log (`/var/log/cups/error_log`) via stderr — the filter should log there
+- Python venv at `/usr/local/lib/sentient-printer/venv/` owned by root
+- Config file at `/usr/local/etc/sentient-printer.yaml` (chmod 600 — protects API key)
+- Sudoers rule at `/etc/sudoers.d/sentient-printer` grants `_lp` permission to run `cp`, `test`, `osascript` as the printing user (needed for PDF saving and notifications)
+- Logs go to CUPS error log (`/var/log/cups/error_log`) via stderr
 
 ### Fail-Open Requirement
-**Never lose a print job.** If anything fails — LLM timeout, API error, PDF modification crash — the filter MUST forward the original unmodified document to the real printer. The user chose to print something; we don't get to eat it. Wrap the entire enhance pipeline in a try/except that falls back to passthrough.
+**Never lose a print job.** If anything fails — LLM timeout, API error, PDF modification crash — the filter MUST forward the original unmodified document. Wrap the entire enhance pipeline in a try/except that falls back to passthrough.
 
 ### Project Structure
 ```
 sentient-printer/
-├── CLAUDE.md              # This file
-├── README.md              # User-facing docs
-├── install.sh             # Installer script
-├── uninstall.sh           # Clean removal
+├── CLAUDE.md                 # This file
+├── install.sh                # Installer script (auto-installs deps via Homebrew)
+├── uninstall.sh              # Clean removal
+├── sentient-printer           # CLI tool (configure, test, status)
+├── requirements.txt          # Python deps: pypdf, fpdf2, requests, pyyaml
+├── Formula/
+│   └── sentient-printer.rb   # Homebrew formula
 ├── src/
-│   ├── filter.py          # Main CUPS filter — receives job, calls LLM, modifies PDF
-│   ├── llm.py             # LLM client (OpenAI / Anthropic / Ollama)
-│   ├── pdf_tools.py       # PDF text extraction + modification
-│   ├── personalities.py   # System prompts for each personality
-│   └── config.py          # Config management (real printer, personality, API settings)
+│   ├── filter.py             # Main CUPS filter — receives job, calls LLM, modifies PDF
+│   ├── llm.py                # LLM client (OpenAI / Anthropic / Ollama via requests)
+│   ├── pdf_tools.py          # PDF text extraction (pypdf) + modification (fpdf2)
+│   ├── personalities.py      # System prompts for each personality (6 built-in + custom)
+│   └── config.py             # Config management (YAML, sane defaults)
 ├── ppd/
 │   └── sentient-printer.ppd  # Printer description file for CUPS
 ├── config/
-│   └── sentient-printer.yaml # User config (real printer name, personality, API key, etc.)
+│   └── sentient-printer.yaml # Default/example config
 └── tests/
-    ├── test_filter.py
-    ├── test_llm.py
-    └── sample_docs/       # Sample PDFs for testing
+    ├── conftest.py           # Shared fixtures
+    ├── test_filter.py        # PDF tools + filter tests
+    └── test_llm.py           # LLM client + personality tests
 ```
 
 ### Config File (sentient-printer.yaml)
-MVP config is intentionally minimal — 3 things the user must decide, everything else has sane defaults.
 ```yaml
-real_printer: "HP_LaserJet_Pro"   # CUPS name of the real printer to forward to
+real_printer: ""                  # CUPS name of real printer (blank for PDF-only)
 personality: "passive-aggressive"  # Which personality to use
 
 llm:
   provider: "openai"              # openai | anthropic | ollama
-  model: "gpt-4o"                # Model name (default per provider)
-  api_key: ""                     # Required for openai/anthropic, ignored for ollama
-  base_url: ""                    # Only needed for ollama (default: http://localhost:11434)
+  model: ""                       # Leave empty for provider default
+  api_key: ""                     # Required for openai/anthropic
+  base_url: ""                    # Only needed for custom endpoints / ollama
 ```
 
-### Personalities (System Prompts)
-Each personality is a system prompt that instructs the LLM how to comment on printed documents. Ship with several built-in:
-
-- **passive-aggressive** — Corporate snark. "Per my previous print job..."
-- **existential** — Questions the meaning of printing. "Another document enters the void."
-- **supportive** — Wholesome encouragement. "Great work on this!"
-- **eco-guilt** — Environmental shame. "This killed 0.3 trees."
-- **judgy** — Pure judgment. "Really? You're printing THIS?"
-- **unhinged** — Chaotic energy. No filter.
-- **custom** — User provides their own system prompt
+### Personalities
+6 built-in + custom:
+- **passive-aggressive** — Corporate snark
+- **existential** — Questions the meaning of printing
+- **supportive** — Wholesome encouragement
+- **eco-guilt** — Environmental shame
+- **judgy** — Pure judgment
+- **unhinged** — Chaotic energy
+- **custom** — User provides their own system prompt in config
 
 ### Install Flow
 ```bash
-# User runs:
-./install.sh
-
-# Script does:
-# 1. Check dependencies (Python 3, cups, pdftotext)
-# 2. Install Python deps (pypdf, fpdf2, requests, pyyaml)
-# 3. Copy filter script to CUPS filter directory
-# 4. Copy PPD file
-# 5. Register virtual printer with lpadmin
-# 6. Prompt: "Select your real printer:" (list from lpstat)
-# 7. Prompt: "Choose a personality:" (list options)
-# 8. Prompt: "LLM provider:" (openai/anthropic/ollama)
-# 9. Write config file
-# 10. Enable printer
-# "Sentient Printer" now appears in System Settings → Printers
+sudo ./install.sh
+# 1. Auto-installs Python 3 and poppler via Homebrew if missing
+# 2. Creates venv + installs Python deps
+# 3. Copies filter to /usr/local/libexec/cups/filter/
+# 4. Installs PPD and config
+# 5. Adds sudoers rule for _lp user
+# 6. Prompts: real printer (or blank for PDF-only), personality, LLM provider + API key
+# 7. Registers CUPS printers (SentientPrinter and/or SentientPDF)
 ```
 
-### Key Commands Reference
+### Key Commands
 ```bash
-# List existing printers
-lpstat -p -d
+# Install / Uninstall
+sudo ./install.sh
+sudo ./uninstall.sh
 
-# Add a CUPS printer with custom backend
-lpadmin -p SentientPrinter -E -v "sentient://localhost" -P /path/to/sentient-printer.ppd
+# CLI tool
+sentient-printer configure     # Interactive setup
+sentient-printer test file.pdf # Test pipeline without printing
+sentient-printer status        # Show config
 
-# Remove
-lpadmin -x SentientPrinter
+# Print
+lp -d SentientPrinter file.pdf  # Print with commentary
+lp -d SentientPDF file.pdf      # Save roasted PDF to Desktop
 
-# Restart CUPS
-sudo launchctl stop org.cups.cupsd && sudo launchctl start org.cups.cupsd
+# Debug
+tail -f /var/log/cups/error_log | grep SENTIENT
 
-# Test print
-lp -d SentientPrinter /path/to/test.pdf
+# Homebrew (once tap is published)
+brew tap CharlieMc0/tap
+brew install sentient-printer
 ```
-
-## MVP Scope
-Build the simplest working version first:
-
-1. ✅ CUPS filter that intercepts print jobs
-2. ✅ Extract text from PDF via pdftotext (poppler)
-3. ✅ Call OpenAI with one personality (Ollama/Anthropic as secondary)
-4. ✅ Append a commentary page to the PDF (fpdf2 + pypdf)
-5. ✅ Forward to real printer — fail open on any error
-6. ✅ Install script that sets it all up (venv, permissions, CUPS registration)
-7. ✅ At least 3 personalities
-8. ✅ Log to CUPS error log via stderr
-
-### Out of Scope for MVP
-- Network/AirPrint mode (Phase 2 — see below)
-- Windows/Linux support
-- GUI settings app
-- App Store distribution
-- Homebrew formula
-
-### Post-MVP: Network Printer Mode (Phase 2 — Top Priority)
-
-**The killer feature.** One Mac runs Sentient Printer. Every device on the network sees it as a regular printer — iPhones, iPads, other Macs, Windows laptops. Zero install on client devices.
-
-This turns it from a solo novelty into a shared experience. Set it up in an office, don't tell anyone, and wait. The comedy writes itself. This is the viral mechanic — the install funnel collapses from "every person installs" to "one person installs and an entire office gets pranked."
-
-#### How it works
-- CUPS already speaks IPP (Internet Printing Protocol)
-- macOS has Bonjour/mDNS built in
-- Sharing a CUPS printer over the network is mostly `cupsctl --share-printers` + Bonjour TXT records for AirPrint discovery
-- iPhones/iPads discover AirPrint printers automatically — zero config on the client side
-- The Sentient Printer just needs to advertise itself as an AirPrint-compatible shared printer
-
-#### Implementation
-1. Enable CUPS printer sharing (`cupsctl --share-printers`)
-2. Register Bonjour service with the right AirPrint TXT records (`_ipp._tcp`, `_universal._sub._ipp._tcp`)
-3. Ensure the virtual printer's PPD advertises PDF/image MIME types AirPrint expects
-4. The install script gets a `--network` flag (or the config UI has a toggle)
-5. Optional: mDNS advertisement via `dns-sd` or `avahi` for broader compatibility
-
-#### What this enables
-- **Office prank mode:** Install on one Mac, every printer in the building gets sentient
-- **Home mode:** Family prints from phones/tablets, gets roasted
-- **Demo mode:** Show it off at a meetup — anyone can print to it from their phone
-- No app install, no accounts, no setup on client devices. It just appears.
-
-### Post-MVP: Distribution & Config UI
-
-#### Homebrew Formula (Phase 2)
-The goal is `brew install sentient-printer` and you're done. Homebrew handles:
-- Installing Python deps into a sandboxed prefix
-- Installing poppler (for pdftotext) as a dependency
-- Copying the CUPS filter + PPD to the right locations
-- Running `lpadmin` to register the virtual printer via a post-install script
-- A `sentient-printer configure` CLI command for first-time setup (pick real printer, enter API key, choose personality)
-
-Homebrew is the right first distribution channel — this is a macOS CLI tool for a technical audience.
-
-#### Config UI (Phase 2-3)
-A lightweight macOS menu bar app (Python + rumps, or Swift) that:
-- Lives in the menu bar with a printer icon
-- Lets you pick personality from a dropdown
-- Enter/change API key
-- Select real printer (populated from `lpstat`)
-- Toggle the printer on/off
-- Shows recent print job commentary (fun to re-read)
-
-This is what makes it feel like an "app" instead of a hacker tool. The menu bar app just reads/writes the same YAML config file — no new backend needed.
-
-#### Possible: .pkg Installer (Phase 3)
-A macOS `.pkg` installer for non-technical users. Double-click, grant permissions, done. This is the path to broader distribution but adds signing/notarization complexity. Only worth it if the project gets traction.
 
 ## Tech Stack
 - **Language:** Python 3
-- **PDF generation:** fpdf2 (lightweight, generates the commentary page)
-- **PDF merging:** pypdf (merge commentary page into original doc)
-- **Text extraction:** pdftotext (poppler-utils) — hard dependency, no fallback
-- **LLM:** OpenAI (default), Anthropic, Ollama (local/offline)
-- **Config:** YAML (minimal — 3 required fields for MVP)
+- **PDF generation:** fpdf2 (generates commentary page)
+- **PDF merging + text extraction:** pypdf (pure Python, no external deps)
+- **LLM:** OpenAI (default), Anthropic, Ollama — all via `requests` (no SDK deps)
+- **Notifications:** osascript (built into macOS)
+- **Config:** YAML (pyyaml)
 - **Print system:** CUPS (native macOS)
+- **Distribution:** Homebrew tap at CharlieMc0/homebrew-tap
 
 ## Repo
-- GitHub: CharlieMc0 (to be created)
+- GitHub: CharlieMc0/sentient-printer
+- Homebrew tap: CharlieMc0/homebrew-tap
 - License: MIT
 - Parent: Lugh Labs LLC
+
+## macOS SIP Gotchas
+- `/usr/libexec/cups/filter/` is SIP-protected — use `/usr/local/libexec/cups/filter/`
+- `/usr/share/ppd/` is SIP-protected — use `/usr/local/share/ppd/`
+- `/usr/local/etc/` may not exist — create with `mkdir -p` before writing config
+- PPD must use **absolute path** to filter (CUPS won't find it by name in /usr/local/)
+- `sudo -H` flag needed when running pip to avoid cache ownership warnings
+
+## Post-MVP Roadmap
+1. **Network/AirPrint mode** — Share printer over local network via CUPS + Bonjour
+2. **Config UI** — Menu bar app for personality/API key management
+3. **.pkg installer** — For non-technical users
 
 ## Vibe
 This is a fun weekend project that should make people laugh. Keep the code simple, the personalities sharp, and the README entertaining. The demo video of someone printing a doc and getting roasted is the marketing.

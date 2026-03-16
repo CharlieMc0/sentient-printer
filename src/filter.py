@@ -41,13 +41,12 @@ def notify(user: str, commentary: str, title: str = "document") -> None:
     short = commentary[:150] + ("..." if len(commentary) > 150 else "")
 
     # Pass text via stdin to avoid AppleScript injection through string interpolation
-    script = (
-        'on run argv\n'
-        '  set msg to item 1 of argv\n'
-        '  set subtitle_text to item 2 of argv\n'
-        '  display notification msg with title "🖨️ Your Printer Has Thoughts" subtitle subtitle_text\n'
-        'end run'
-    )
+    script = """\
+on run argv
+  set msg to item 1 of argv
+  set subtitle_text to item 2 of argv
+  display notification msg with title "🖨️ Your Printer Has Thoughts" subtitle subtitle_text
+end run"""
 
     try:
         cmd = ["sudo", "-u", user, "osascript", "-", short, title] if user else ["osascript", "-", short, title]
@@ -108,7 +107,7 @@ def enhance(input_path: str, pdf_mode: bool = False, title: str = "document", us
             dest = os.path.join(pdf_dir, f"{safe_title}_sentient.pdf")
             # Find unique filename via sudo test
             counter = 1
-            while subprocess.run(
+            while counter < 100 and subprocess.run(
                 ["sudo", "-u", user, "test", "-e", dest],
                 capture_output=True,
             ).returncode == 0:
