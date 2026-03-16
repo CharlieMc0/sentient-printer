@@ -8,6 +8,7 @@ CONFIG_PATH="/usr/local/etc/sentient-printer.yaml"
 FILTER_PATH="/usr/libexec/cups/filter/sentient-printer-filter"
 PPD_DIR="/usr/share/ppd/sentient-printer"
 PRINTER_NAME="SentientPrinter"
+PDF_PRINTER_NAME="SentientPDF"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -22,13 +23,15 @@ if [[ $EUID -ne 0 ]]; then
     exec sudo "$0" "$@"
 fi
 
-# Remove CUPS printer
-if lpstat -p "$PRINTER_NAME" &>/dev/null; then
-    lpadmin -x "$PRINTER_NAME"
-    echo -e "${GREEN}✓${NC} Removed CUPS printer '$PRINTER_NAME'"
-else
-    echo "  Printer '$PRINTER_NAME' not found in CUPS (already removed)"
-fi
+# Remove CUPS printers
+for P in "$PRINTER_NAME" "$PDF_PRINTER_NAME"; do
+    if lpstat -p "$P" &>/dev/null; then
+        lpadmin -x "$P"
+        echo -e "${GREEN}✓${NC} Removed CUPS printer '$P'"
+    else
+        echo "  Printer '$P' not found in CUPS (already removed)"
+    fi
+done
 
 # Remove filter
 if [[ -f "$FILTER_PATH" ]]; then

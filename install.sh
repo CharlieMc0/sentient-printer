@@ -180,7 +180,7 @@ echo -e "${GREEN}✓${NC} Config written to $CONFIG_PATH"
 # Remove existing if present
 lpadmin -x "$PRINTER_NAME" 2>/dev/null || true
 
-# Register the virtual printer
+# Register the virtual printer (forwards to real printer)
 lpadmin -p "$PRINTER_NAME" \
     -E \
     -v "file:///dev/null" \
@@ -189,9 +189,22 @@ lpadmin -p "$PRINTER_NAME" \
     -L "Your printer, but with opinions"
 echo -e "${GREEN}✓${NC} CUPS printer '$PRINTER_NAME' registered"
 
+# Register the PDF-only printer (saves to Desktop)
+PDF_PRINTER_NAME="SentientPDF"
+lpadmin -x "$PDF_PRINTER_NAME" 2>/dev/null || true
+lpadmin -p "$PDF_PRINTER_NAME" \
+    -E \
+    -v "file:///dev/null" \
+    -P "$PPD_DIR/sentient-printer.ppd" \
+    -D "Sentient PDF" \
+    -L "Get roasted, saved to Desktop"
+echo -e "${GREEN}✓${NC} CUPS printer '$PDF_PRINTER_NAME' registered (saves PDF to Desktop)"
+
 # Enable
 cupsenable "$PRINTER_NAME" 2>/dev/null || true
 cupsaccept "$PRINTER_NAME" 2>/dev/null || true
+cupsenable "$PDF_PRINTER_NAME" 2>/dev/null || true
+cupsaccept "$PDF_PRINTER_NAME" 2>/dev/null || true
 
 echo ""
 echo -e "${GREEN}✅ Sentient Printer installed!${NC}"

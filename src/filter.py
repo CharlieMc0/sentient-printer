@@ -40,7 +40,7 @@ def passthrough(input_path: str) -> None:
         shutil.copyfileobj(f, sys.stdout.buffer)
 
 
-def enhance(input_path: str) -> None:
+def enhance(input_path: str, pdf_mode: bool = False, title: str = "document", user: str = "") -> None:
     """Run the enhancement pipeline: extract text, get commentary, append page."""
     from config import load_config
     from llm import get_commentary
@@ -68,6 +68,28 @@ def enhance(input_path: str) -> None:
     output_path = input_path + ".enhanced.pdf"
     try:
         append_commentary(input_path, commentary, output_path)
+
+        if pdf_mode:
+            # Save to user's Desktop instead of forwarding to printer
+            safe_title = "".join(c if c.isalnum() or c in " -_." else "_" for c in title).strip() or "print"
+            # Resolve the printing user's home (filter runs as _lp, not the user)
+            import pwd
+            try:
+                user_home = pwd.getpwnam(user).pw_dir if user else os.path.expanduser("~")
+            except KeyError:
+                user_home = os.path.expanduser("~")
+            pdf_dir = config.get("pdf_output_dir", os.path.join(user_home, "Desktop"))
+            os.makedirs(pdf_dir, exist_ok=True)
+            dest = os.path.join(pdf_dir, f"{safe_title}_sentient.pdf")
+            # Avoid overwriting existing files
+            counter = 1
+            while os.path.exists(dest):
+                dest = os.path.join(pdf_dir, f"{safe_title}_sentient_{counter}.pdf")
+                counter += 1
+            shutil.copy2(output_path, dest)
+            log(f"PDF saved to {dest}")
+
+        # Always write to stdout for CUPS pipeline
         with open(output_path, "rb") as f:
             shutil.copyfileobj(f, sys.stdout.buffer)
         log("Enhanced PDF written to stdout")
@@ -89,7 +111,11 @@ def main() -> None:
     user = sys.argv[2]
     title = sys.argv[3]
 
-    log(f"Job {job_id} from {user}: {title}")
+    # Detect PDF-only mode — CUPS sets PRINTER env var for the destination printer
+    printer_name = os.environ.get("PRINTER", "")
+    pdf_mode = "pdf" in printer_name.lower()
+
+    log(f"Job {job_id} from {user}: {title} (printer={printer_name}, pdf_mode={pdf_mode})")
 
     # Get input PDF — from filename arg or stdin
     tmp_input = None
@@ -105,7 +131,7 @@ def main() -> None:
     try:
         # Fail-open: if anything goes wrong, pass the original through
         try:
-            enhance(input_path)
+            enhance(input_path, pdf_mode=pdf_mode, title=title, user=user)
         except Exception as e:
             log(f"Enhancement failed ({type(e).__name__}: {e}), passing through original")
             passthrough(input_path)
