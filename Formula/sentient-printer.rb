@@ -2,7 +2,7 @@ class SentientPrinter < Formula
   desc "A virtual printer that roasts your documents with AI commentary"
   homepage "https://github.com/CharlieMc0/sentient-printer"
   url "https://github.com/CharlieMc0/sentient-printer/archive/refs/tags/v0.1.0.tar.gz"
-  # sha256 will be filled after first release
+  sha256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
   license "MIT"
 
   depends_on "poppler"   # for pdftotext
